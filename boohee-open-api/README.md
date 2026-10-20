@@ -1,6 +1,6 @@
 # 薄荷科学.AI 开放平台 API Skill
 
-把公司健康 AI 基础能力平台 [ai.boohee.com/docs](https://ai.boohee.com/docs/) 的开放接口文档，整理成一份可被 AI 编程助手（Qoder CLI / Desktop）自动加载使用的 **Skill**。
+把薄荷科学.AI 健康 AI 基础能力平台 [ai.boohee.com/docs](https://ai.boohee.com/docs/) 的开放接口文档，整理成一份可被 AI 编程助手（Qoder CLI / Desktop）自动加载使用的 **Skill**。
 
 装上之后，你直接用自然语言提需求，助手就会按官方文档的口径去调接口，而不是凭记忆编造字段和营养数据。
 
@@ -79,12 +79,11 @@ ln -s "$(pwd)" <你的项目路径>/.qoder/skills/boohee-open-api
 python3 scripts/fetch_docs.py --doc dc199d79   # 看某篇文档的官网当前原文（只读）
 python3 scripts/fetch_docs.py                  # 全量比对，逐篇列出变动（只读，退出码 0=一致 2=有漂移）
 python3 scripts/fetch_docs.py --apply          # 变动写回 references/（幂等，不产生虚假 diff）
-python3 scripts/fetch_docs.py food2026         # 换一本手册，如食物数据 2026
 ```
 
 数据源是文档站的公开接口，无需登录。`--apply` 只重写 `references/01~06`；`SKILL.md` 与 `00-endpoints.md` 属于人工整理的索引，要按变动复核后再 `git diff` 提交。
 
-已知的其他手册 code：`food2026`（食物数据 2026）、`recipe_generate`（食谱文档）、`ODw7x788`（薄荷健康 OAuth 2.0 数据授权）、`yPdama3h7X`（内部文档）等，完整列表用 `GET https://api.boohee.com/open-interface/v1/panel/docs/categories?page=1&page_size=100` 查。
+默认只同步「薄荷科学.AI」这一本手册，也就是本 skill 覆盖的能力范围。
 
 ## 已知文档问题
 

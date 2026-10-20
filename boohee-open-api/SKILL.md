@@ -7,7 +7,7 @@ description: 薄荷科学.AI 开放平台（https://ai.boohee.com/docs/）健康
 
 ## Overview
 
-封装公司健康 AI 基础能力平台的 35 篇官方文档（六章、31 个接口 + Webhook 回调协议 + 多语言 SDK）。所有参数、字段、枚举均以 `https://ai.boohee.com/docs/`（默认手册「薄荷科学.AI」，`code=boohee.ai`）原文为准，禁止凭记忆编造字段名或枚举值。
+封装薄荷科学.AI 健康 AI 基础能力平台的 35 篇官方文档（六章、31 个接口 + Webhook 回调协议 + 多语言 SDK）。所有参数、字段、枚举均以 `https://ai.boohee.com/docs/`（默认手册「薄荷科学.AI」，`code=boohee.ai`）原文为准，禁止凭记忆编造字段名或枚举值。
 
 Base URL：`https://api.boohee.com/open-apis`
 统一响应：`{"code":0,"message":"","now":1722851989,"data":{...}}`，`code=0` 才算成功。
@@ -36,7 +36,7 @@ Base URL：`https://api.boohee.com/open-apis`
 
 ### 方式一：X-Api-Key（默认推荐，一步到位）
 
-1. 浏览器打开控制台 `https://ai.boohee.com/console/`，用公司的开放平台账号登录（没有账号需先注册，或找平台管理员开通应用）。
+1. 浏览器打开控制台 `https://ai.boohee.com/console/`，用开放平台账号登录（没有账号可在控制台注册；需要开通应用时联系平台对接方）。
 2. 进入「API Key 管理」，创建一个 API Key，值形如 `sk-` + 十六进制串。
 3. 每次请求带一个头即可：
 
@@ -47,7 +47,7 @@ curl 'https://api.boohee.com/open-apis/v1/food/search?keyword=%E7%89%9B%E5%A5%B6
 
 ### 方式二：Bearer Token（需要 RSA 私钥，仅长期服务端调用才值得）
 
-前置：平台分配给你的 `app_id`、`app_secret`，以及**由薄荷提供的 RSA 私钥**（签名要用它，控制台不外发，需向平台方索取）。
+前置：平台分配给你的 `app_id`、`app_secret`，以及**由平台方提供的 RSA 私钥**（签名要用它，控制台不下发，需向平台对接方索取）。
 
 1. 组装 `{app_id, timestamp}`，`timestamp` 为秒级时间戳，与服务器时差 **不超过 60 秒**。
 2. 按 `references/01-general.md` 1.3 生成 `sign`：参数按 key 正序 → 拼成 `app_idbooheetimestamp1470042310` → 首尾各拼一次 `app_secret`（无分隔符）→ 用 RSA 私钥做 RSA-SHA256 → base64 结果即 `sign`。
@@ -57,7 +57,7 @@ curl 'https://api.boohee.com/open-apis/v1/food/search?keyword=%E7%89%9B%E5%A5%B6
 ### 没有凭证时怎么办（硬规则）
 
 - **停下来向用户要**：说明缺 `X-Api-Key`（或 `app_id` + `app_secret` + RSA 私钥），并给出上面的获取路径。
-- **严禁**拿模型记忆里的通用成分表、其他食物库数据顶替薄荷接口返回值交付给用户。
+- **严禁**拿模型记忆里的通用成分表、其他食物库数据顶替开放平台接口返回值交付给用户。
 - 用户明确表示拿不到凭证、仍要求给参考值时，必须在结果开头标注「以下为通用营养参考值，非薄荷食物库返回，`food_code` 不存在、不可用于写入类接口」，且不得编造看起来合法的 `food_code`。
 
 ## 接入流程
@@ -148,4 +148,4 @@ python3 scripts/fetch_docs.py --apply
 - 允许自动执行第 1、2 步（只读）。第 3 步写文件前，若你处在只读环境或用户未授权改动仓库，先说明再动手。
 - **禁止**为了让接口"看起来能用"而删除文档里的约束、改写枚举、或把 `references/` 改成迎合当前实现的样子。事实以官网为准。
 - 拉取失败（无外网、接口下线）时，明确告诉用户"无法核对官网，当前依据是 `references/` 的快照，快照时间见各篇更新时间"，不要假装已验证。
-- 换手册或查官网收录了哪些手册：`python3 scripts/fetch_docs.py <手册code>`；手册清单见 `GET https://api.boohee.com/open-interface/v1/panel/docs/categories?page=1&page_size=100`。
+- 核对范围只限本 skill 覆盖的「薄荷科学.AI」手册（`scripts/fetch_docs.py` 默认 `code=boohee.ai`）。文档站还挂了其他项目的手册，其中含客户定制与内部资料，**不要**在 skill、回复或代码里列举它们的名字、code 或目录接口。

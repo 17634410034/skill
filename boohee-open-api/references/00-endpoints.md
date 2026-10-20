@@ -12,7 +12,7 @@ Base URL: `https://api.boohee.com/open-apis`（除 `/v1/access_token` 外，全�
 | — | Webhook 回调 | 平台主动 POST 推送 `smart_recipe` / `food_recognize` 事件；含 challenge 地址验证、HMAC-SHA256 验签 | 1.4 |
 | — | SDK | Go/Python/Java/Node.js SDK，仓库 https://github.com/BOOHEEAI/sdk | 1.5 |
 
-签名规则（1.3）：参数按 key 正序排序 → 拼成 `k1v1k2v2...` → 首尾各拼一次 appSecret（无分隔符）→ RSA-SHA256（私钥由薄荷提供）→ 作为 `sign` 参数。
+签名规则（1.3）：参数按 key 正序排序 → 拼成 `k1v1k2v2...` → 首尾各拼一次 appSecret（无分隔符）→ RSA-SHA256（私钥由平台对接方提供）→ 作为 `sign` 参数。
 
 ## 二、食物数据 → `02-food-data.md`
 
