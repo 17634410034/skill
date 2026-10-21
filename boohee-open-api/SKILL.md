@@ -47,7 +47,7 @@ curl 'https://api.boohee.com/open-apis/v1/food/search?keyword=%E7%89%9B%E5%A5%B6
 
 ### 方式二：Bearer Token（需要 RSA 私钥，仅长期服务端调用才值得）
 
-前置：平台分配给你的 `app_id`、`app_secret`，以及**由平台方提供的 RSA 私钥**（签名要用它，控制台不下发，需向平台对接方索取）。
+前置：平台分配给你的 `app_id`、`app_secret`，以及**由平台方提供的 RSA 私钥**（签名要用它，需要从控制台下载）。
 
 1. 组装 `{app_id, timestamp}`，`timestamp` 为秒级时间戳，与服务器时差 **不超过 60 秒**。
 2. 按 `references/01-general.md` 1.3 生成 `sign`：参数按 key 正序 → 拼成 `app_idbooheetimestamp1470042310` → 首尾各拼一次 `app_secret`（无分隔符）→ 用 RSA 私钥做 RSA-SHA256 → base64 结果即 `sign`。
