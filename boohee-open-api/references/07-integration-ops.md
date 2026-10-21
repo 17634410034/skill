@@ -28,7 +28,8 @@ SKILL.md 只留「能做什么 + 怎么开始」。本篇是执行层细则：�
    ```bash
    python3 scripts/config.py show
    ```
-   只有文件不存在、或所需字段为空时才向用户索取；拿到后按下面 `set` 写回，不要只记在对话里。
+   文件不存在时先 `python3 scripts/config.py init` 生成模板（用户手填前也需要这一步，否则目录里根本没有 `config.json`），再引导用户填或请用户直接给值。
+   只有所需字段为空时才向用户索取；拿到后按下面 `set` 写回，不要只记在对话里。
    `api_key` 若仍是占位文案或含中文，等同没填 —— 脚本已拦住，不要绕过它手工拼 curl 去发请求。
 2. 一律通过 `scripts/config.py` 读写配置，**不要手写 JSON**（脚本校验字段名、保持 0600、原子写）。
 3. 环境变量 `BOOHEE_API_KEY` / `BOOHEE_APP_ID` / `BOOHEE_APP_SECRET` 优先于文件；用户当场提供的值优先于任何存量，并且**必须回写进 `config.json`**（除非用户说"别存"）。
