@@ -1,0 +1,39 @@
+{
+  "_step1_title": "★★★★★★★★★★★★★ 第 1 步（必填 · 只需要这一个就能跑起来）★★★★★★★★★★★★★",
+  "api_key": ">>>>在这里填写你的key<<<<<",
+
+
+  "_step2_title": "第 2 步（可选 · 不填也能用，第 1 步的 API Key 已够用）",
+  "profile": {
+    "user_id": "",
+    "gender": null,
+    "latest_weight": null,
+    "energy": null,
+    "height": null,
+    "age": null,
+    "goal": "",
+    "diet_favor": "",
+    "diet_area": "",
+    "diet_mode": [],
+    "weight_management": null,
+    "nutrition_management": null,
+    "ban_foods": [],
+    "illness": [],
+    "updated_at": null
+  },
+
+  "_advanced_title": "进阶（可整块不管 · 只用 X-Api-Key 就保持空着）",
+  "app_id": "",
+  "app_secret": "",
+  "rsa_private_key_path": null,
+  "token": {
+    "access_token": "",
+    "expires_at": null
+  },
+  "webhook": {
+    "app_key": "",
+    "url": ""
+  },
+  "base_url": "https://api.boohee.com/open-apis",
+  "notes": ""
+}
