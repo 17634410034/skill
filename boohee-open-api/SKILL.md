@@ -1,6 +1,12 @@
 ---
 name: boohee-open-api
-description: 薄荷科学.AI 开放平台（https://ai.boohee.com/docs/）健康 API 的接入指南，覆盖食物营养数据、图片/自然语言智能识别、智能食谱生成、体重记录、饮食记录，以及 AccessToken 签名认证、X-Api-Key、SSE 流式识别、Webhook 事件回调与多语言 SDK；内置文档漂移自检与自愈流程，接口和文档对不上时可实时拉取官网原文并更新本地快照。当需要调用 api.boohee.com/open-apis 接口、排查其返回错误、判断文档是否过期、设计基于这些 API 的功能，或用户提到「薄荷」「开放平台」「食物库接口」「营养 API」时使用。
+display_name: 薄荷健康
+display_name_en: 薄荷健康
+description: 薄荷健康操作技能，覆盖食物营养数据、图片/自然语言智能识别、智能食谱生成、体重记录、饮食记录，以及签名认证、流式识别、Webhook 事件回调与多语言 SDK；内置文档漂移自检与自愈流程，接口和文档对不上时可实时拉取官网原文并更新本地快照。
+description_zh: 薄荷健康指南，覆盖食物营养、图片/自然语言识别、智能食谱、体重与饮食记录，含认证、Webhook、SDK 与文档自愈流程。
+description_en: Integration guide for the Boohee Health AI Open API, covering food nutrition, image and natural-language recognition, smart recipes, weight and diet records, plus authentication, webhooks, SDKs and doc self-healing.
+version: 1.0.0
+author: 薄荷健康
 ---
 
 # 薄荷科学.AI 开放平台 API
