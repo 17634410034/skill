@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """技能本地配置：存放 API 凭证与个人资料，供调用接口时自动读取。
 
-config.json 不进 git（见 .gitignore），权限 0600。API Key 就放在文件最上方
+config.json 只留在本机、不随技能包分发，权限 0600。API Key 就放在文件最上方
 api_key 那一行（模板里用 ★ 标注）。环境变量 BOOHEE_API_KEY / BOOHEE_APP_ID /
 BOOHEE_APP_SECRET 优先于文件内容。
 
-  python3 scripts/config.py init                       # 从 config.example.json 生成 config.json
-  python3 scripts/config.py show                       # 查看当前配置（密钥脱敏）
-  python3 scripts/config.py get profile.user_id        # 取值
-  python3 scripts/config.py set api_key 'sk-xxx'        # 写凭证
-  python3 scripts/config.py set profile.gender 1        # 写资料（1男 2女）
-  python3 scripts/config.py set profile.latest_weight 68.5   # 同步写体重记录接口
-  python3 scripts/config.py unset api_key               # 清空某个值
-  python3 scripts/config.py call GET /v2/weight/latest   # 带凭证调接口，自动合并 profile
-  python3 scripts/config.py call POST /v2/weight/record --json '{"weight":68.5}'
+下文 `<技能目录>` 一律替换为本脚本所在目录的上一级（即 SKILL.md 所在目录）绝对路径，
+不要依赖当前工作目录。
+
+  python3 <技能目录>/scripts/config.py init                    # 从 config.example.json 生成 config.json
+  python3 <技能目录>/scripts/config.py show                    # 查看当前配置（密钥脱敏）
+  python3 <技能目录>/scripts/config.py get profile.user_id     # 取值
+  python3 <技能目录>/scripts/config.py set api_key 'sk-xxx'     # 写凭证
+  python3 <技能目录>/scripts/config.py set profile.gender 1    # 写资料（1男 2女）
+  python3 <技能目录>/scripts/config.py set profile.latest_weight 68.5  # 同步写体重记录接口
+  python3 <技能目录>/scripts/config.py unset api_key           # 清空某个值
+  python3 <技能目录>/scripts/config.py call GET /v2/weight/latest       # 带凭证调接口，自动合并 profile
+  python3 <技能目录>/scripts/config.py call POST /v2/weight/record --json '{"weight":68.5}'
 """
 import argparse
 import json
@@ -25,6 +28,7 @@ import urllib.request
 from urllib.parse import quote, urlsplit, urlunsplit
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SELF = os.path.abspath(__file__)
 CONFIG_PATH = os.path.join(SKILL_DIR, "config.json")
 EXAMPLE_PATH = os.path.join(SKILL_DIR, "config.example.json")
 DEFAULT_BASE_URL = "https://api.boohee.com/open-apis"
@@ -71,7 +75,7 @@ TEMPLATE = {
 
 def load_config():
     if not os.path.exists(CONFIG_PATH):
-        sys.exit(f"ERROR 还没有配置文件：{CONFIG_PATH}\n先执行 python3 scripts/config.py init")
+        sys.exit(f"ERROR 还没有配置文件：{CONFIG_PATH}\n先执行 python3 {SELF} init")
     with open(CONFIG_PATH, encoding="utf-8") as fp:
         cfg = json.load(fp)
     for key, env in ENV_OVERRIDES.items():
@@ -180,9 +184,9 @@ def credential_headers(cfg):
     sys.exit(
         "ERROR 没有可用凭证。\n"
         f"  {STAR_NOTICE}\n"
-        "  命令写入：python3 scripts/config.py set api_key 'sk-xxx'\n"
+        f"  命令写入：python3 {SELF} set api_key 'sk-xxx'\n"
         "  或手动编辑：把 config.json 顶部 api_key 那一行的占位文字替换成真实密钥\n"
-        "  Bearer 链路：先备齐 app_id/app_secret/RSA 私钥，见 SKILL.md「先拿凭证」"
+        "  Bearer 链路：先备齐 app_id/app_secret/RSA 私钥，见 SKILL.md「配好 API Key」一节"
     )
 
 
@@ -234,10 +238,10 @@ def cmd_init(_args):
         json.dump(template, fp, ensure_ascii=False, indent=2)
         fp.write("\n")
     os.chmod(CONFIG_PATH, 0o600)
-    print(f"已创建 {CONFIG_PATH}（0600，不进 git）")
+    print(f"已创建 {CONFIG_PATH}（0600，只留在本机，不随技能包分发）")
     print(STAR_NOTICE)
     print(f"手动填写：打开文件，把 api_key 那一行的「{API_KEY_PLACEHOLDER}」换成真实密钥。")
-    print("或交给助手：python3 scripts/config.py set api_key 'sk-xxx'")
+    print(f"或交给助手：python3 {SELF} set api_key 'sk-xxx'")
 
 
 def cmd_show(_args):

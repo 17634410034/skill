@@ -3,11 +3,13 @@
 
 公开接口，无需登录。默认只做检查、不写文件。
 
-  python3 fetch_docs.py                  # 检查漂移（退出码 0=一致 2=有变动 1=出错）
-  python3 fetch_docs.py --apply          # 把变动写入 references/
-  python3 fetch_docs.py --doc <code|id>  # 打印某篇文档的官网当前原文
-  python3 fetch_docs.py --json           # 机器可读的差异报告
-  python3 fetch_docs.py <手册code>       # 换一本手册（默认 boohee.ai）
+下文 `<技能目录>` 一律替换为本脚本所在目录的上一级（即 SKILL.md 所在目录）绝对路径。
+
+  python3 <技能目录>/scripts/fetch_docs.py                  # 检查漂移（退出码 0=一致 2=有变动 1=出错）
+  python3 <技能目录>/scripts/fetch_docs.py --apply          # 把变动写入 references/
+  python3 <技能目录>/scripts/fetch_docs.py --doc <code|id>  # 打印某篇文档的官网当前原文
+  python3 <技能目录>/scripts/fetch_docs.py --json           # 机器可读的差异报告
+  python3 <技能目录>/scripts/fetch_docs.py <手册code>        # 换一本手册（默认 boohee.ai）
 """
 import argparse
 import hashlib
@@ -213,9 +215,9 @@ def main():
         for name, n in apply_writes(chapters, ref_dir):
             print(f"  写入 {name}（{n} 篇）")
         print("已更新 references/。注意：SKILL.md 与 references/00-endpoints.md 是人工整理的索引，"
-              "需按上面的变动同步复核，然后 git diff 交人工确认后再提交。")
+              "需按上面的变动同步复核，改前先把手工核对结果列给用户确认。")
     elif drift:
-        print("\n本地落后于官网。执行 `python3 scripts/fetch_docs.py --apply` 更新 references/。")
+        print(f"\n本地落后于官网。执行 `python3 {os.path.abspath(__file__)} --apply` 更新 references/。")
 
     sys.exit(2 if drift else 0)
 
