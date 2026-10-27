@@ -2,9 +2,9 @@
 name: boohee-open-api
 display_name: 薄荷健康食物数据库
 display_name_en: Boohee Food Database
-description: 薄荷健康开放接口助手。两种用法：一是帮你把食物营养、餐食识别、智能食谱、体重与饮食记录接进自己的应用——按官方文档原文生成可运行的 Go/Python/Java/Node.js 调用代码、RSA 签名链路、异步任务轮询与 Webhook 回调实现，无需先拿到 key；二是配好 API Key 后直接用自然语言查食物营养、拍照识别、生成食谱、记录体重饮食，数据来自官方实时接口。内置 29 段官方文档返回示例供离线对照，另附文档漂移自检与自愈流程。
-description_zh: 薄荷健康开放接口助手：按官方文档生成接入代码、讲清签名与 Webhook，或配好 API Key 后直接查营养、识别餐食、配食谱、记体重饮食。含官方示例离线对照与文档自愈。
-description_en: Boohee Health Open API assistant. Generate runnable Go/Python/Java/Node.js integration code from the official docs (auth signing, async tasks, webhooks) without a key, or connect an API Key to query food nutrition, recognize meals, build recipes and log weight/diet in real time. Ships 29 official response samples for offline reference, plus doc-drift self-healing.
+description: 薄荷健康食物数据库能力,可以查询食物与营养成分、通过图片识别食物信息、根据需求生成个性化食谱、记录和查询体重体脂等基础数据。
+description_zh: 薄荷健康食物数据库能力,可以查询食物与营养成分、通过图片识别食物信息、根据需求生成个性化食谱、记录和查询体重体脂等基础数据。
+description_en: The BooHee Health Food Database has the capability to query food and nutritional information, identify food through images, generate personalized recipes based on needs, and record and query basic data such as weight and body fat.
 version: 1.1.0
 author: 薄荷健康
 ---
