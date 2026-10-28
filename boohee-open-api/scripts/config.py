@@ -2,13 +2,17 @@
 """技能本地配置：存放 API 凭证与个人资料，供调用接口时自动读取。
 
 config.json 只留在本机、不随技能包分发，权限 0600。API Key 就放在文件最上方
-api_key 那一行（模板里用 ★ 标注）。环境变量 BOOHEE_API_KEY / BOOHEE_APP_ID /
-BOOHEE_APP_SECRET 优先于文件内容。
+api_key 那一行（模板里用 ★ 标注）。环境变量 BOOHEE_API_KEY 优先于文件内容。
 
-下文 `<技能目录>` 一律替换为本脚本所在目录的上一级（即 SKILL.md 所在目录）绝对路径，
+config.json 默认放在技能目录；技能目录不可写（只读安装、容器只读挂载）时自动改用
+~/.boohee-open-api/config.json。旧位置的 config.json 仍会被读取，下次写入时迁移到
+当前可写位置。实际路径以 init/show 的输出为准。
+
+下文 `<技能目录>` 一律指 SKILL.md 所在目录（即本脚本所在目录的上一级）的绝对路径，
 不要依赖当前工作目录。
 
   python3 <技能目录>/scripts/config.py init                    # 从 config.example.json 生成 config.json
+  python3 <技能目录>/scripts/config.py check                   # 凭证门禁：KEY_OK / NO_KEY（退出码 0/1）
   python3 <技能目录>/scripts/config.py show                    # 查看当前配置（密钥脱敏）
   python3 <技能目录>/scripts/config.py get profile.user_id     # 取值
   python3 <技能目录>/scripts/config.py set api_key 'sk-xxx'     # 写凭证
@@ -29,22 +33,29 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SELF = os.path.abspath(__file__)
-CONFIG_PATH = os.path.join(SKILL_DIR, "config.json")
+LOCAL_CONFIG_PATH = os.path.join(SKILL_DIR, "config.json")
+USER_CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".boohee-open-api")
+USER_CONFIG_PATH = os.path.join(USER_CONFIG_DIR, "config.json")
+# 技能目录可写就存技能目录，否则退到用户目录，避免只读安装下整条配置链路失效
+CONFIG_PATH = LOCAL_CONFIG_PATH if os.access(SKILL_DIR, os.W_OK) else USER_CONFIG_PATH
 EXAMPLE_PATH = os.path.join(SKILL_DIR, "config.example.json")
 DEFAULT_BASE_URL = "https://api.boohee.com/open-apis"
-SECRET_KEYS = ("api_key", "app_secret", "access_token", "app_key")
-ENV_OVERRIDES = {"api_key": "BOOHEE_API_KEY", "app_id": "BOOHEE_APP_ID", "app_secret": "BOOHEE_APP_SECRET"}
+SECRET_KEYS = ("api_key",)
+ENV_OVERRIDES = {"api_key": "BOOHEE_API_KEY"}
+# 旧版本遗留的开发者字段：读取时丢弃，避免 show 明文带出 app_secret / access_token
+LEGACY_KEYS = {"_advanced_title", "app_id", "app_secret", "rsa_private_key_path",
+               "token", "webhook", "base_url", "notes"}
 # 模板里的占位文案（改这里即可，运行时判定不依赖它完全一致）
 API_KEY_PLACEHOLDER = ">>>>在这里填写你的key<<<<<"
 
-STAR_NOTICE = "★★★★★ API Key 填在 config.json 最上面的 api_key 那一行（控制台 https://ai.boohee.com/console/ →「API Key 管理」创建）★★★★★"
+STAR_NOTICE = f"★★★★★ API Key 填在 {CONFIG_PATH} 最上面的 api_key 那一行（控制台 https://ai.boohee.com/console/ →「API Key 管理」创建）★★★★★"
 
 # 与 config.example.json 保持一致（该文件缺失时的兜底模板）
 TEMPLATE = {
     "_step1_title": "★★★★★★★★★★★★★ 第 1 步（必填 · 只需要这一个就能跑起来）★★★★★★★★★★★★★",
     "_step1_hint": "key 在控制台 https://ai.boohee.com/console/ →「API Key 管理」创建，sk- 开头，整串填进下面 api_key 那一行。",
     "api_key": API_KEY_PLACEHOLDER,
-    "_step2_title": "第 2 步（可选 · 不填也能用，第 1 步的 API Key 已够用）",
+    "_step2_title": "第 2 步（可选 · 不填也能查食物，填了才能记录与生成食谱）",
     "profile": {
         "user_id": "",
         "gender": None,
@@ -62,36 +73,54 @@ TEMPLATE = {
         "illness": [],
         "updated_at": None,
     },
-    "_advanced_title": "进阶（可整块不管 · 只用 X-Api-Key 就保持空着）",
-    "app_id": "",
-    "app_secret": "",
-    "rsa_private_key_path": None,
-    "token": {"access_token": "", "expires_at": None},
-    "webhook": {"app_key": "", "url": ""},
-    "base_url": DEFAULT_BASE_URL,
-    "notes": "",
 }
 
 
+def config_source():
+    """读哪个文件：优先当前写入位置，其次另一处（兼容换过位置的旧配置）。"""
+    other = USER_CONFIG_PATH if CONFIG_PATH == LOCAL_CONFIG_PATH else LOCAL_CONFIG_PATH
+    for path in (CONFIG_PATH, other):
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def normalize(cfg):
+    """丢弃旧版本的开发者字段，保证展示与回写都不再带 app_secret / access_token。"""
+    for key in LEGACY_KEYS:
+        cfg.pop(key, None)
+    cfg.setdefault("profile", {})
+    return cfg
+
+
 def load_config():
-    if not os.path.exists(CONFIG_PATH):
-        sys.exit(f"ERROR 还没有配置文件：{CONFIG_PATH}\n先执行 python3 {SELF} init")
-    with open(CONFIG_PATH, encoding="utf-8") as fp:
+    path = config_source()
+    if not path:
+        sys.exit(
+            f"ERROR 还没有配置文件（已查找 {LOCAL_CONFIG_PATH} 与 {USER_CONFIG_PATH}）\n"
+            f"先执行 python3 {SELF} init"
+        )
+    with open(path, encoding="utf-8") as fp:
         cfg = json.load(fp)
     for key, env in ENV_OVERRIDES.items():
         if os.environ.get(env):
             cfg[key] = os.environ[env]
-    return cfg
+    return normalize(cfg)
 
 
 def save_config(cfg):
+    cfg = normalize(cfg)
     cfg["profile"]["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     tmp = CONFIG_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fp:
-        json.dump(cfg, fp, ensure_ascii=False, indent=2)
-        fp.write("\n")
-    os.replace(tmp, CONFIG_PATH)
-    os.chmod(CONFIG_PATH, 0o600)
+    try:
+        os.makedirs(os.path.dirname(CONFIG_PATH), mode=0o700, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as fp:
+            json.dump(cfg, fp, ensure_ascii=False, indent=2)
+            fp.write("\n")
+        os.replace(tmp, CONFIG_PATH)
+        os.chmod(CONFIG_PATH, 0o600)
+    except OSError as exc:
+        sys.exit(f"ERROR 无法写入 {CONFIG_PATH}：{exc}")
     print(f"已写入 {CONFIG_PATH}")
 
 
@@ -171,23 +200,22 @@ def usable_api_key(value):
     return True
 
 
+def has_api_key(cfg):
+    return usable_api_key(cfg.get("api_key") or "")
+
+
 def credential_headers(cfg):
-    api_key = cfg.get("api_key") or ""
-    if usable_api_key(api_key):
-        if not api_key.startswith("sk-"):
-            print(f"提示：api_key 不是 sk- 开头，请确认已从控制台完整复制：{mask(api_key)}")
-        return {"X-Api-Key": api_key}
-    token = (cfg.get("token") or {}).get("access_token") or ""
-    expires_at = (cfg.get("token") or {}).get("expires_at") or 0
-    if token and (not expires_at or expires_at > time.time()):
-        return {"Authorization": f"Bearer {token}"}
-    sys.exit(
-        "ERROR 没有可用凭证。\n"
-        f"  {STAR_NOTICE}\n"
-        f"  命令写入：python3 {SELF} set api_key 'sk-xxx'\n"
-        "  或手动编辑：把 config.json 顶部 api_key 那一行的占位文字替换成真实密钥\n"
-        "  Bearer 链路：先备齐 app_id/app_secret/RSA 私钥，见 SKILL.md「配好 API Key」一节"
-    )
+    if not has_api_key(cfg):
+        sys.exit(
+            "ERROR 没有可用凭证。\n"
+            f"  {STAR_NOTICE}\n"
+            f"  命令写入：python3 {SELF} set api_key 'sk-xxx'\n"
+            "  或手动编辑：上面路径的 config.json 顶部 api_key 那一行的占位文字替换成真实密钥"
+        )
+    api_key = cfg["api_key"]
+    if not api_key.startswith("sk-"):
+        print(f"提示：api_key 不是 sk- 开头，请确认已从控制台完整复制：{mask(api_key)}")
+    return {"X-Api-Key": api_key}
 
 
 def http_call(method, path, body, headers):
@@ -225,8 +253,9 @@ def sync_weight(cfg, weight, record_on):
 
 
 def cmd_init(_args):
-    if os.path.exists(CONFIG_PATH):
-        sys.exit(f"{CONFIG_PATH} 已存在，未覆盖。要重置请先手动删除。")
+    existing = config_source()
+    if existing:
+        sys.exit(f"{existing} 已存在，未覆盖。要重置请先手动删除。")
     template = TEMPLATE
     if os.path.exists(EXAMPLE_PATH):
         try:
@@ -234,14 +263,45 @@ def cmd_init(_args):
                 template = json.load(fp)
         except json.JSONDecodeError as exc:
             print(f"警告：config.example.json 解析失败（{exc}），改用脚本内置模板。")
-    with open(CONFIG_PATH, "w", encoding="utf-8") as fp:
-        json.dump(template, fp, ensure_ascii=False, indent=2)
-        fp.write("\n")
-    os.chmod(CONFIG_PATH, 0o600)
+    try:
+        os.makedirs(os.path.dirname(CONFIG_PATH), mode=0o700, exist_ok=True)
+        with open(CONFIG_PATH, "w", encoding="utf-8") as fp:
+            json.dump(template, fp, ensure_ascii=False, indent=2)
+            fp.write("\n")
+        os.chmod(CONFIG_PATH, 0o600)
+    except OSError as exc:
+        sys.exit(f"ERROR 无法写入 {CONFIG_PATH}：{exc}")
     print(f"已创建 {CONFIG_PATH}（0600，只留在本机，不随技能包分发）")
     print(STAR_NOTICE)
     print(f"手动填写：打开文件，把 api_key 那一行的「{API_KEY_PLACEHOLDER}」换成真实密钥。")
     print(f"或交给助手：python3 {SELF} set api_key 'sk-xxx'")
+
+
+def cmd_check(_args):
+    """凭证门禁：首行给 Agent 可机械判断的状态，退出码 0=有凭证，1=没有。"""
+    path = config_source()
+    cfg = {}
+    if path:
+        try:
+            with open(path, encoding="utf-8") as fp:
+                cfg = json.load(fp)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"NO_KEY {path}")
+            print(f"  配置文件读不出来：{exc}")
+            print(f"  修复：删除后重新 python3 {SELF} init")
+            sys.exit(1)
+    for key, env in ENV_OVERRIDES.items():
+        if os.environ.get(env):
+            cfg[key] = os.environ[env]
+    normalize(cfg)
+    if has_api_key(cfg):
+        print(f"KEY_OK {path or '-'}")
+        return
+    print(f"NO_KEY {path or '-'}")
+    print("  获取：https://ai.boohee.com/console/ → 登录/注册 →「API Key 管理」→ 创建 → 复制 sk- 开头的完整密钥")
+    print(f"  写入：python3 {SELF} set api_key 'sk-xxx'（还没有配置文件时先 python3 {SELF} init）")
+    print("  填好后重新运行 check")
+    sys.exit(1)
 
 
 def cmd_show(_args):
@@ -326,6 +386,7 @@ def main():
     parser = argparse.ArgumentParser(description="薄荷开放平台技能本地配置")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init", help="生成 config.json").set_defaults(func=cmd_init)
+    sub.add_parser("check", help="检查是否已有可用 API Key（KEY_OK / NO_KEY）").set_defaults(func=cmd_check)
     sub.add_parser("show", help="查看配置（脱敏）").set_defaults(func=cmd_show)
 
     p_get = sub.add_parser("get", help="读取一个配置项")

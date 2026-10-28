@@ -3,6 +3,9 @@
 
 公开接口，无需登录。默认只做检查、不写文件。
 
+只同步 references/ 下的业务文档（02~06）；00-endpoints.md、SKILL.md、07-integration-ops.md
+是人工整理的索引，不参与同步。
+
 下文 `<技能目录>` 一律替换为本脚本所在目录的上一级（即 SKILL.md 所在目录）绝对路径。
 
   python3 <技能目录>/scripts/fetch_docs.py                  # 检查漂移（退出码 0=一致 2=有变动 1=出错）
@@ -24,8 +27,8 @@ API = "https://api.boohee.com/open-interface/v1/panel/docs-index?code={}"
 UA = "boohee-skill-docs-sync"
 
 # 章序号 -> 稳定文件名，与 references/ 现有文件保持一致
+# 只同步业务文档（02~06）；通用规范章节不纳入本技能包
 CHAPTER_NAMES = {
-    "一": "01-general",
     "二": "02-food-data",
     "三": "03-recognition",
     "四": "04-recipe",
@@ -59,6 +62,8 @@ def flatten(trees):
     for cat in trees[0].get("sub_categories") or []:
         key = cat["name"].split("、")[0]
         fname = CHAPTER_NAMES.get(key)
+        if not fname:
+            continue
         docs = {}
         for doc in sorted(cat.get("documents") or [], key=lambda d: d["position"]):
             docs[doc["code"]] = {
@@ -75,8 +80,11 @@ def load_local(ref_dir):
     local = {}
     if not os.path.isdir(ref_dir):
         return local
+    allowed = set(CHAPTER_NAMES.values())
     for fn in sorted(os.listdir(ref_dir)):
         if not fn.endswith(".md") or fn.startswith("00-") or fn.endswith(".new.md"):
+            continue
+        if fn[:-3] not in allowed:
             continue
         text = open(os.path.join(ref_dir, fn), encoding="utf-8").read()
         hits = list(MARKER.finditer(text))

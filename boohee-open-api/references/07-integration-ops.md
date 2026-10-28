@@ -1,16 +1,16 @@
-# 接入操作细则（从 SKILL.md 迁出）
+# 运行时操作细则
 
-SKILL.md 只留「能做什么 + 怎么开始」。本篇是执行层细则：本地配置字段、认证与签名、请求发起方式、异步与 Webhook、排错、已知坑、文档自愈流程。**要真正发起调用或写代码前先读这里。**
+SKILL.md 承担「三步执行流程 + 能力路由」。本篇是第 2 步（选接口并请求）的执行层细则：本地配置、请求头、发起请求、异步轮询、响应与错误码、已知坑、文档自愈。**要真正发起调用前先读这里。**
 
-> 下文 `<技能目录>` 一律替换为 SKILL.md 所在目录的**绝对路径**。技能目录不是当前工作目录，照抄相对路径会 `No such file or directory`。
+> 下文 `<技能目录>` 一律指 SKILL.md 所在目录的**绝对路径**。技能目录不是当前工作目录，照抄相对路径会 `No such file or directory`。
 
 ## 目录
 
 1. 本地配置 `config.json` 细则
-2. 认证与签名
+2. API Key 与请求头
 3. 发起请求
-4. 异步任务与 Webhook
-5. 排错表
+4. 异步任务轮询
+5. 响应与错误码
 6. 关键约束与坑
 7. 凭证与个人数据安全
 8. 文档漂移自检与自愈
@@ -20,28 +20,34 @@ SKILL.md 只留「能做什么 + 怎么开始」。本篇是执行层细则：�
 
 ## 1. 本地配置 `config.json` 细则
 
-技能目录下 `config.json` 存放**用户自己的** API 凭证与身体/个人信息，只留在本机、不随技能包分发，权限 `0600`。它让助手不必每轮都追着用户要 key 和 `user_id`。
+`config.json` 存放**用户自己的** API Key 与身体/个人信息，只留在本机、不随技能包分发，权限 `0600`。它让助手不必每轮都追着用户要 key 和 `user_id`。
 
-**API Key 放在最显眼的位置**：`init` 生成的文件顶部就是第 1 步，`api_key` 独占一块、上面是「第 1 步（必填）」的 ★ 标题，与其他待填项分开；占位文案（或任何含中文的值）会被脚本识别为「还没填」，`show`/`get api_key`/`call` 都会明确提示，不会拿它去发请求。第 2 块是可选的 `profile`，进阶凭证（`app_id`/`app_secret`/RSA 私钥/Webhook）排在最后，用户不用 API Key 可以整块忽略。
+落点：默认在技能目录；技能目录不可写（只读安装、容器只读挂载）时自动改用 `~/.boohee-open-api/config.json`。旧位置的 `config.json` 仍会被读取，下次写入时迁移到当前可写位置。**实际路径以 `check` / `show` / `init` 打印的为准**，不要自己拼。
+
+**API Key 放在最显眼的位置**：`init` 生成的文件顶部就是第 1 步，`api_key` 独占一块、上面是「第 1 步（必填）」的 ★ 标题。占位文案（或任何含中文的值）会被脚本识别为「还没填」，`check` / `show` / `get api_key` / `call` 都会明确提示，不会拿它去发请求。第 2 块是可选的 `profile`。
 
 ### 读写规则（硬规则）
 
-1. 要调接口前，**先读 `config.json`，再问用户**：
+1. 取数或写数据前，**先跑凭证门禁**：
+   ```bash
+   python3 <技能目录>/scripts/config.py check
+   ```
+   首行 `KEY_OK`（退出码 0）表示可用；`NO_KEY`（退出码 1）时**停下向用户索取 API Key**，不发请求、不用示例数据顶替。凭证就绪后再看其余字段：
    ```bash
    python3 <技能目录>/scripts/config.py show
    ```
-   文件不存在时先 `python3 <技能目录>/scripts/config.py init` 生成模板（用户手填前也需要这一步，否则目录里根本没有 `config.json`），再引导用户填或请用户直接给值。
+   文件不存在时先 `python3 <技能目录>/scripts/config.py init` 生成模板，再引导用户填或请用户直接给值。
    只有所需字段为空时才向用户索取；拿到后按下面 `set` 写回，不要只记在对话里。
-   `api_key` 若仍是占位文案或含中文，等同没填 —— 脚本已拦住，不要绕过它手工拼 curl 去发请求。
-2. 一律通过 `scripts/config.py` 读写配置，**不要手写 JSON**（脚本校验字段名、保持 0600、原子写）。
-3. 环境变量 `BOOHEE_API_KEY` / `BOOHEE_APP_ID` / `BOOHEE_APP_SECRET` 优先于文件；用户当场提供的值优先于任何存量，并且**必须回写进 `config.json`**（除非用户说"别存"）。
-4. 所有请求走 `python3 <技能目录>/scripts/config.py call <METHOD> <PATH> [--json '...']`：它自动挑 `api_key` 或 `access_token`，POST 时自动把非空 `profile` 字段合并进 body（用户显式传的同名字段覆盖 profile，`--no-merge-profile` 关闭合并）。
+2. 一律通过 `<技能目录>/scripts/config.py` 读写配置，**不要手写 JSON**（脚本校验字段名、保持 0600、原子写）。
+3. 环境变量 `BOOHEE_API_KEY` 优先于文件；用户当场提供的值优先于任何存量，并且**必须回写进 `config.json`**（除非用户说"别存"）。
+4. 所有请求走 `python3 <技能目录>/scripts/config.py call <METHOD> <PATH> [--json '...']`：它自动带上 `X-Api-Key`，POST 时自动把非空 `profile` 字段合并进 body（用户显式传的同名字段覆盖 profile，`--no-merge-profile` 关闭合并）。
 5. 展示配置永远用 `show`（密钥自动脱敏）；`get --secret` 取到的原值只能用于发起请求，**禁止**出现在回复、日志、代码或提交里。
 
 ### 命令
 
 ```bash
 python3 <技能目录>/scripts/config.py init                        # 生成 config.json（模板见 config.example.json）
+python3 <技能目录>/scripts/config.py check                       # 凭证门禁：KEY_OK / NO_KEY（退出码 0/1）
 python3 <技能目录>/scripts/config.py show                        # 查看当前配置，密钥脱敏
 python3 <技能目录>/scripts/config.py set api_key 'sk-xxx'         # 存 API Key
 python3 <技能目录>/scripts/config.py set profile.user_id 'U1001'  # 存业务 user_id
@@ -52,20 +58,19 @@ python3 <技能目录>/scripts/config.py unset api_key               # 清空
 python3 <技能目录>/scripts/config.py call GET '/v1/food/search?keyword=牛奶'   # 路径里的中文会自动转义
 ```
 
-引导用户手动填写时，直接说位置：**打开 `config.json`，最上面 ★ 标题下的 `api_key` 那一行**，把占位文字换成 `sk-` 开头的完整密钥；其余区块不用动。
+引导用户手动填写时，直接说位置：**打开 `show` 第一行给出的那个 `config.json`，最上面 ★ 标题下的 `api_key` 那一行**，把占位文字换成 `sk-` 开头的完整密钥；其余区块不用动。
 
 ### 字段
 
 | 路径 | 用途 |
 |---|---|
-| `api_key` | X-Api-Key 认证，控制台「API Key 管理」创建 |
-| `app_id` / `app_secret` / `rsa_private_key_path` / `token.*` | Bearer Token 链路；`rsa_private_key_path` **只填私钥文件绝对路径**，私钥内容绝不入库、不进配置 |
-| `base_url` | 默认生产域名，联调可改 |
-| `webhook.app_key` / `webhook.url` | 回调验签与订阅登记 |
+| `api_key` | 唯一凭证，请求头 `X-Api-Key`；控制台「API Key 管理」创建 |
 | `profile.user_id` | 写入类接口的业务用户 id，必填 |
 | `profile.gender` / `latest_weight` / `energy` / `height` / `age` | 食谱生成必填项与记录类接口默认值 |
 | `profile.diet_favor` / `diet_area` / `diet_mode` / `weight_management` / `nutrition_management` / `ban_foods` / `illness` | 食谱生成偏好；枚举照 `04-recipe.md` |
-| `notes` | 自由备注（过敏、器械、目标等） |
+| `profile.goal` | 用户的减脂/增肌等目标描述，用于映射 `weight_management` / `diet_mode` |
+
+旧版本配置里的进阶凭证字段会在读取时自动丢弃，不需要手工清理。
 
 ### 自动记录（用户把信息告诉助手时）
 
@@ -73,7 +78,7 @@ python3 <技能目录>/scripts/config.py call GET '/v1/food/search?keyword=牛�
 
 | 用户说了什么 | 写哪里 |
 |---|---|
-| 「key 是 sk-xxx」「用这个 app_id」 | `set api_key …` / `set app_id …` |
+| 「key 是 sk-xxx」 | `set api_key …` |
 | 「我的 user_id / 薄荷 id 是 U1001」 | `set profile.user_id U1001` |
 | 「我是女生 / 男生」 | `set profile.gender 2` / `1` |
 | 「我体重 68.5kg」 | `set profile.latest_weight 68.5`（同步写体重记录接口；用户只让参考、不想留档时加 `--no-sync`） |
@@ -90,84 +95,57 @@ python3 <技能目录>/scripts/config.py call GET '/v1/food/search?keyword=牛�
 
 ---
 
-## 2. 认证与签名
+## 2. API Key 与请求头
 
-优先级：环境变量 > `config.json` > 向用户索取。**索取之前先执行 `python3 <技能目录>/scripts/config.py show`**，配置里已有可用凭证就直接用；确认缺失才问，拿到后按第 1 节 `set` 回写。
-
-`https://api.boohee.com/open-apis` 下除 `/v1/access_token` 外的**所有接口都必须带凭证**，否则返回 HTTP 200 但 `{"code":1049,"message":"缺少认证凭证，请提供 AccessToken 或 X-Api-Key"}`。凭证有两种，任选其一放到请求头：
-
-### 方式一：X-Api-Key（默认推荐，一步到位）
-
-1. 浏览器打开控制台 `https://ai.boohee.com/console/`，用开放平台账号登录（没有账号可在控制台注册；需要开通应用时联系平台对接方）。
-2. 进入「API Key 管理」，创建一个 API Key，值形如 `sk-` + 十六进制串。
-3. 每次请求带一个头即可：
-
-```bash
-python3 <技能目录>/scripts/config.py call GET '/v1/food/search?keyword=牛奶'
-# 等价于：
-curl 'https://api.boohee.com/open-apis/v1/food/search?keyword=%E7%89%9B%E5%A5%B6' \
-  -H 'X-Api-Key: sk-你的key' -H 'Accept: */*'
-```
-
-### 方式二：Bearer Token（需要 RSA 私钥，仅长期服务端调用才值得）
-
-前置：平台分配给你的 `app_id`、`app_secret`，以及**由平台方提供的 RSA 私钥**（签名要用它，需要从控制台下载）。
-
-1. 组装 `{app_id, timestamp}`，`timestamp` 为秒级时间戳，与服务器时差 **不超过 60 秒**。
-2. 按 `01-general.md` 1.3 生成 `sign`：参数按 key 正序 → 拼成 `app_idbooheetimestamp1470042310` → 首尾各拼一次 `app_secret`（无分隔符）→ 用 RSA 私钥做 RSA-SHA256 → base64 结果即 `sign`。
-3. `POST /v1/access_token`，Body JSON 传 `app_id` / `timestamp` / `sign`，拿回 `data.access_token` 与 `expires_in`（默认 86400 秒）。
-4. 后续请求带 `-H 'Authorization: Bearer {access_token}'`；过期后重新走 1-3。
-
-### 没有凭证时怎么办（硬规则）
-
-- **先查本地配置**：`python3 <技能目录>/scripts/config.py show`；已有 `api_key` 或未过期 `token.access_token` 就直接用。文件不存在时先 `init`。
-- 配置里确实没有时，**不要只把用户推回去注册账号**，按需求类型分两条路：
-  - 用户要的是**接入代码 / 字段说明 / 签名与 Webhook 实现**：直接照 `references/01~06` 官方原文写，本来就不需要凭证。
-  - 用户要的是**数据本身**：用 `references/demo-samples.md` 的官方文档示例返回演示结构与口径，**回复第一行声明**「以下为薄荷官方接口文档的示例返回，非实时查询结果」，并说明其中的 `food_code` 不可用于写入；同时告诉用户配 key 的路径（见上两种方式）。
-- **严禁**拿模型记忆里的通用成分表、其他食物库数据顶替开放平台接口返回值交付给用户。
-- 用户明确表示只要一个大致参考值、不关心是否来自食物库时，必须显式说明「这是模型常识参考，不来自薄荷食物库」，且不得编造看起来合法的 `food_code`。
-
----
+- 获取：控制台 `https://ai.boohee.com/console/` → 登录或注册 → 左侧「API Key 管理」→ 创建 → 复制 `sk-` 开头的完整密钥。
+- 请求头：`X-Api-Key: <key>`。**所有业务接口只认这一种凭证**；`config.py call` 会自动带上，不要手工拼请求。
+- 缺失或无效时 HTTP 仍是 200，body 为 `{"code":1049,"message":"缺少认证凭证..."}`。看到 1049 就是没带 key 或 key 不可用，不是接口故障。
+- 环境变量 `BOOHEE_API_KEY` 优先于 `config.json`，适合 CI 或临时试用。
 
 ## 3. 发起请求
 
-1. **确认凭证已就绪**（见第 1、2 节）：`python3 <技能目录>/scripts/config.py show` 取本地配置，选一种认证方式，全程统一；请求统一用 `config.py call` 发起。
-2. **定位接口**：用 `00-endpoints.md` 的速查表匹配能力，不要自造路径。注意版本前缀：食物/识别/食谱是 `v1`，体重/饮食记录是 `v2`。
+1. **确认凭证已就绪**：先 `python3 <技能目录>/scripts/config.py check`，`KEY_OK` 才继续；再用 `show` 查看 `user_id` 等字段。
+2. **定位接口**：用 `00-endpoints.md` 的速查表匹配能力，不要自造路径。版本前缀：食物 / 识别 / 食谱是 `v1`，体重 / 饮食记录是 `v2`。
+3. **带业务身份**：食谱、体重、饮食接口必须传 `user_id`，默认取 `profile.user_id`；为空时先问用户。
+4. **两段式查询**：`/v1/food/search` 拿 `food_code` 后再查 `/v1/food/detail`；分类先 `/v1/food/categories` 拿 `id` 和 `kind`，再查 `/v1/food/list`。
+5. **图片输入**：`image_url` 或 `image_data`（base64），≤10MB，jpg/jpeg/jpe/png。
+6. **分页**：`search` 的 `per_page` 最大 50，返回带 `has_more`；体重与曲线接口用 `page` / `page_size`，返回带 `total` / `has_more`。用户要全量时按需翻页，并在回答里说明范围。
 
-## 4. 异步任务与 Webhook
+## 4. 异步任务轮询
 
-1. **异步能力走「提交 → 回调/轮询 → 取详情」**：
-   - 图片识别：`POST /v1/food/image_recognize` 拿 `task_id` → 轮询 `GET /v1/food/image_recognize_detail`，或订阅 `food_recognize` Webhook。
-   - 智能食谱：`POST /v1/recipe/generate` 拿 `task_id` → 订阅 `smart_recipe` Webhook → 用 `user_id` + 请求时传的 `date` 调 `GET /v1/recipe/details`。
-   - 需要边生成边展示时改用流式接口 `POST /v1/food/image_recongize_stream`（SSE，`end=true` 的那帧才带完整 `food_info`）。
-2. **实现 Webhook 时严格照 `01-general.md` 1.4**：1 秒内返回 200；用 `app_key` 对 `{timestamp}.{event}.{raw_body}` 做 HMAC-SHA256 验签（raw body 不可反序列化后重新序列化）；地址验证需返回 `HMAC-SHA256(app_key, challenge)` 的 hex；回调只给状态，数据仍要回查详情接口；IP 不固定，禁止用 IP 白名单。
+1. **图片识别**：`POST /v1/food/image_recognize` 只返回 `task_id`；随后轮询 `GET /v1/food/image_recognize_detail?task_id=…`。
+   - `status=1` 解析中 → 继续轮询；`status=2` 已完成；`status=3` 未识别到食物；`status=4` 识别失败。
+   - 拿到结果后，营养值是**每 100g**，要按识别出的 `amount` 折算成实际摄入。
+2. **智能食谱**：`POST /v1/recipe/generate` 只返回 `task_id`，没有轮询接口；生成需要时间，稍后用 `GET /v1/recipe/details?user_id=&date=` 取结果。长时间为空就告诉用户稍后再查，不要反复空转。
+3. **自然语言识别**：`POST /v1/food/text_recognize` 同步返回，不需要轮询。
+4. 任务未到终态时**不要**把中间状态当成最终结果交付；回答里说明「仍在处理中」。
 
-## 5. 排错表
+## 5. 响应与错误码
+
+统一响应外层：`{"code": 0, "message": "...", "now": 时间戳, "data": {...}}`。`code=0` 成功，非 0 失败；失败时以 `message` 为准向用户说明，不猜。
 
 | 现象 | 原因与处理 |
 |---|---|
-| `code:1049` 缺少认证凭证 | 请求头没带 `X-Api-Key` 也没带 `Authorization`；补凭证。别当成接口故障 |
-| `code:0` 但 `data` 为空 | 多为 `keyword` 超 30 字符、`food_code` 不存在、`barcode` 非 13 位；先按速查表核对入参 |
-| `access_token` 换取失败 | `timestamp` 与服务器差超 60 秒，或 `sign` 拼接顺序/RSA 私钥/appSecret 用错（对照 1.3 逐步验证） |
-| 识别/食谱任务一直不出结果 | 这两个是异步接口，只返回 `task_id`；必须轮询详情接口或接好 Webhook |
+| `code:1049` 缺少认证凭证 | 请求头没带 `X-Api-Key`，或 key 是占位/含中文。先跑 `check` |
+| `code:0` 但 `data` 为空 | 多为 `keyword` 超 30 字符、`food_code` 不存在、`barcode` 非 13 位；按速查表核对入参 |
+| 识别/食谱任务一直没结果 | 异步接口只返回 `task_id`，必须轮询详情或稍后重查；不是接口坏了 |
 | HTTP 5xx | 平台侧问题，重试；不要改路径去"绕" |
-| 参数/字段/枚举与 `references/` 快照对不上 | 先怀疑文档过期，走第 8 节，不要直接断言接口故障 |
+| 参数/字段/枚举与 `references/` 快照对不上 | 先怀疑文档过期，走「文档漂移自检与自愈」，不要直接断言接口故障 |
 
 ## 6. 关键约束与坑
 
 - 枚举值必须查原文：`meal_type`/`time_type`（1早餐 2中餐 3晚餐 4加餐 6/7/8 加餐）、`health_light`（0无 1绿 2黄 3红）、`gender`、`ban_foods` 1-14、`illness` 1-6、`diet_mode` 字符串集合等，都在各章表格里，别猜。
 - 营养数据口径是「每 100g」，实际摄入要按 `amount`/`weight` 折算；`nrv` 是小数（0.15 = 15%）。
 - 搜索用 `keyword` 或 `barcode`；写饮食记录只接受食物库的 `food_code`（`foods` 备注「仅支持食物库食物」）。
-- 食谱详情的 `food_id` 官方标注「不再返回，请使用 `food_code`」，新代码一律用 `food_code`。
-- 流式识别路径官方拼写就是 `image_recongize_stream`（拼错），照抄，不要"修正"成 recognize。
-- 官网文档存在自相矛盾处（示例域名 `api.iboohee.com`、5.1 的 v1/v2、4.3/4.6 的下划线与连字符），已在 `00-endpoints.md` 末尾列出；联调时以真实返回为准，不要据此推断接口不存在。
+- 食谱详情的 `food_id` 官方标注「不再返回，请使用 `food_code`」，一律用 `food_code`。
+- 官网文档存在自相矛盾处（示例域名 `api.iboohee.com`、5.1 的 v1/v2、4.3/4.6 的下划线与连字符），已在 `00-endpoints.md` 末尾列出；以真实返回为准，不要据此推断接口不存在。
 - 未文档化的字段/接口一律先向用户确认，不要虚构。
 
 ## 7. 凭证与个人数据安全
 
-`app_secret`、`app_key`、`X-Api-Key`、`access_token` 只从环境变量、`config.json` 或用户当场提供处取，不写入代码、不提交仓库、不在日志/回复中回显完整值。
+`X-Api-Key` 只从环境变量、`config.json` 或用户当场提供处取，不写入代码、不提交仓库、不在日志/回复中回显完整值。
 
-`config.json` 是本机私有文件（0600，不随技能包分发）：只放用户自己的凭证与档案，RSA 私钥只存路径不存内容；不要把别人的凭证写进示例、不要把 `config.json` 打包上传技能；演示命令里的 key 一律用占位值。
+`config.json` 是本机私有文件（0600，不随技能包分发）：只放用户自己的 key 与档案；不要把别人的 key 写进示例、不要把 `config.json` 打包上传技能；演示命令里的 key 一律用占位值。
 
 ## 8. 文档漂移自检与自愈
 
@@ -178,8 +156,7 @@ curl 'https://api.boohee.com/open-apis/v1/food/search?keyword=%E7%89%9B%E5%A5%B6
 - 路径 404 / 方法不允许，而文档写的是别的方法或版本
 - 返回了文档里没有的字段，或文档声明存在的字段不再返回
 - 必填参数被拒、枚举值报非法（如 `meal_type`、`diet_mode`、`ban_foods` 取值与文档不符）
-- `code` 非 0 且 `message` 与第 5 节排错表的成因都对不上
-- 域名、认证头、Webhook 事件类型与文档描述冲突
+- `code` 非 0 且 `message` 与排错表的成因都对不上
 - 官网「已知文档问题」清单里某条已经不复现
 
 ### 三步流程
@@ -207,18 +184,18 @@ python3 <技能目录>/scripts/fetch_docs.py --json     # 需要程序化处理�
 python3 <技能目录>/scripts/fetch_docs.py --apply
 ```
 
-只重写 `references/01~06`（逐字导出，幂等，不会产生虚假 diff）。新出现的章节会落成 `<章名>.new.md` 并提示人工确认，不会自动接管。
+只重写 `references/02~06` 业务文档（逐字导出，幂等，不会产生虚假 diff）。本技能只同步这五篇业务文档，其他章节不纳入；`00-endpoints.md`、`SKILL.md` 和本篇是人工整理的索引，脚本不会改。
 
 ### 更新后必须做的复核（不可省略）
 
-1. `references/00-endpoints.md`、`SKILL.md` 和本篇是**人工整理的索引**，脚本不会改。逐条核对受影响的接口路径、方法、参数、枚举是否还在。
+1. `references/00-endpoints.md`、`SKILL.md` 和本篇是**人工整理的索引**，逐条核对受影响的接口路径、方法、参数、枚举是否还在。
 2. 重读「已知文档问题」清单：官方可能已修掉某条，别继续把已修复的当坑告诉用户；也可能新增了矛盾。
 3. 把变更前后对照列给用户过目，**由用户决定是否保留**。不要静默改完就走。
 4. 若变动影响的是你正在实现的功能，改完要用真实调用验证一次，而不是只看文档对齐就收工。
 
 ### 边界纪律
 
-- 允许自动执行第 1、2 步（只读）。第 3 步写文件前，若处在只读环境或用户未授权改动技能目录，先说明再动手。
+- 允许自动执行前两步（只读）。写文件前，若处在只读环境或用户未授权改动技能目录，先说明再动手。
 - **禁止**为了让接口"看起来能用"而删除文档里的约束、改写枚举、或把 `references/` 改成迎合当前实现的样子。事实以官网为准。
 - 拉取失败（无外网、接口下线）时，明确告诉用户"无法核对官网，当前依据是 `references/` 的快照，快照时间见各篇更新时间"，不要假装已验证。
 - 核对范围只限本技能覆盖的「薄荷科学.AI」开放接口手册（`<技能目录>/scripts/fetch_docs.py` 默认 `code=boohee.ai`）。**不要**用其他手册 code 去拉取内容，也不要在技能、回复或代码里列举与本技能无关的手册名或目录接口。
@@ -226,19 +203,17 @@ python3 <技能目录>/scripts/fetch_docs.py --apply
 ## 9. 渐进式查阅顺序
 
 1. **先读 `00-endpoints.md`** — 全部接口的方法、路径、作用、关键入参速查表，用于定位该用哪个接口。
-2. **再按需读对应章节原文** — 需要参数表、返回结构、示例时才打开：
+2. **再按需读对应章节原文** — 需要参数表、返回结构、枚举时才打开：
 
 | 需求 | 文件 |
 |---|---|
-| **没有凭证，先看接口真实返回长什么样** | `demo-samples.md`（29 段官方返回示例逐字摘录，按目录只读需要的小节） |
-| 域名/认证/响应规范、获取 AccessToken、RSA 签名算法、Webhook 回调、SDK | `01-general.md` |
 | 食物搜索、详情、分类、分类列表、单位估重、批量营养计算、营养排行 | `02-food-data.md` |
-| 图片识别（异步/流式 SSE）、识别详情、自然语言转食物 | `03-recognition.md` |
+| 图片识别、识别详情、自然语言转食物 | `03-recognition.md` |
 | 生成智能食谱、食谱详情、换一换、替换单菜/整餐、饮食模式列表与详情、食谱概要 | `04-recipe.md` |
 | 体重记录增删查、最新体重、体重/体脂曲线 | `05-weight.md` |
 | 饮食记录批量/单条写入、删除、修改、按天查询、当日最新 | `06-diet.md` |
-| 本地配置细则、认证签名、异步/Webhook、排错、已知坑、文档自愈 | `07-integration-ops.md`（本篇） |
+| 本地配置细则、请求头、异步轮询、排错、已知坑、文档自愈 | `07-integration-ops.md`（本篇） |
 
-每章文件是官网文档的逐字导出（含 `> 文档编号 / 更新时间`），可直接引用其中的表格与 curl 示例。
+每章文件是官网文档的逐字导出（含 `> 文档编号 / 更新时间`）。其中的 curl 与返回示例仅供核对参数与字段口径，**不向用户展示**。
 
-3. **涉及用户本人时读 `config.json`** — 凭证、`user_id`、体重、忌口等存量信息见第 1 节，别反复问用户要。
+3. **涉及用户本人时读 `config.json`** — 凭证、`user_id`、体重、忌口等存量信息见「本地配置」，别反复问用户要。
