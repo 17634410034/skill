@@ -5,7 +5,7 @@ display_name_en: Boohee Food Database
 description: 薄荷健康食物数据库能力,可以查询食物与营养成分、通过图片识别食物信息、根据需求生成个性化食谱、记录和查询体重体脂等基础数据。
 description_zh: 薄荷健康食物数据库能力,可以查询食物与营养成分、通过图片识别食物信息、根据需求生成个性化食谱、记录和查询体重体脂等基础数据。
 description_en: The BooHee Health Food Database has the capability to query food and nutritional information, identify food through images, generate personalized recipes based on needs, and record and query basic data such as weight and body fat.
-version: 2.0.0
+version: 2.2.0
 author: 薄荷健康
 ---
 
@@ -45,17 +45,25 @@ author: 薄荷健康
 
 1. 用 `references/00-endpoints.md` 的速查表把需求映射到接口，不要自造路径。版本前缀：食物 / 识别 / 食谱是 `v1`，体重 / 饮食记录是 `v2`。
 2. 所有请求走 `python3 <技能目录>/scripts/config.py call <METHOD> <PATH> [--json '...']`，不要手拼请求直接发。
-3. 食谱、体重、饮食接口必须带业务 `user_id`：先读 `profile.user_id`，没有就问用户，不要编造。
-4. 两段式查询：`/v1/food/search` 拿 `food_code` 后再查 `/v1/food/detail`；分类先 `/v1/food/categories` 拿 `id` 和 `kind`，再查 `/v1/food/list`。
-5. 异步任务：图片识别 `POST /v1/food/image_recognize` 拿 `task_id` → 轮询 `GET /v1/food/image_recognize_detail`，`status=1` 继续、`2` 完成、`3` 未识别、`4` 失败。食谱 `generate` 只回 `task_id` 且没有轮询接口，稍后用 `user_id` + `date` 查 `/v1/recipe/details`。
-6. 参数、必填项、枚举只查 `references/`，不凭记忆补。
+3. **默认拉满可选字段**：官方把补充数据做成默认关闭的开关，不传就静默省略。除非用户明确只要摘要，一律按下面加满再请求：
+   - `/v1/food/detail`：`with_ingredients=true&with_units=true&with_materials=true` —— 分别带回完整营养项、所有扩展单位（如 1 碗多少克）、菜肴的全部食材与做法。
+   - `/v1/food/search`、`/v1/food/list`：`with_units=true` —— 带回每个食物的扩展单位与估重（最热门单位排第一），用于把「一碗」折算成克。
+   - `/v1/food/image_recognize_detail`：`with_nrv=true&ingredients=<全量营养素编码>` —— 不传这两个参数只返回基础四项营养；全量编码串直接复制 `00-endpoints.md` 里的现成参数。
+4. 食谱、体重、饮食接口必须带业务 `user_id`：先读 `profile.user_id`，没有就问用户，不要编造。
+5. 两段式查询：`/v1/food/search` 拿 `food_code` 后再查 `/v1/food/detail`；分类先 `/v1/food/categories` 拿 `id` 和 `kind`，再查 `/v1/food/list`。
+6. 异步任务：图片识别 `POST /v1/food/image_recognize` 拿 `task_id` → 轮询 `GET /v1/food/image_recognize_detail`，`status=1` 继续、`2` 完成、`3` 未识别、`4` 失败。食谱 `generate` 只回 `task_id` 且没有轮询接口，稍后用 `user_id` + `date` 查 `/v1/recipe/details`。
+7. 参数、必填项、枚举只查 `references/`，不凭记忆补。
 
-### 第 3 步：合并与总结
+### 第 3 步：整理成易读结果
 
-1. 多个接口的结果按用户的问题合并，不要把每段 JSON 依次贴出来。
-2. 统一口径再比较：营养值多为每 100g，按实际重量或份数折算；热量统一 kcal、重量统一 g；枚举翻译成中文。
-3. 回答里给关键数值和判断，标注「数据来自实时接口」，需要时附接口来源。
-4. 分页或异步未完成时说明覆盖范围（如「前 20 条」「识别仍在处理中」），不要让用户误以为拿到了全量。
+用户看到的是**结论 + 中文表格/卡片**，不是 JSON、英文字段名或接口原文。展示模板见 [references/08-presentation.md](./references/08-presentation.md)。
+
+1. **先结论后明细**：第一段用 1-3 句话回答用户的问题（热量多少、能不能吃、是否符合目标），再给支撑数据的表格。
+2. **禁止贴原始输出**：不贴 `config.py call` 的返回、接口 JSON、curl 命令；不裸露 `calories`、`health_light` 这类英文字段名。
+3. **完整但不堆砌**：接口已取到的明细要保留，按「核心营养 → 完整营养（按类别）→ 单位换算 → 食材构成」分节；同类项多时并成短行，空字段不写。
+4. **统一口径**：营养值多为每 100g，按实际重量或份数折算；热量 kcal、重量 g；NRV 写成百分比；枚举翻成中文（绿灯/黄灯/红灯、早餐/中餐/晚餐等）。
+5. **控制篇幅**：一次最多 3 个主表格；长列表先给摘要并标明「共 N 条，当前展示前 X 条」；异步未完成时说明状态。
+6. 回答里给关键数值和判断，标注「数据来自实时接口」；不需要附接口路径或返回示例。
 
 ## 命令与路径约定
 
@@ -85,15 +93,21 @@ find ~ -name SKILL.md -exec grep -l '^name: boohee-open-api' {} + 2>/dev/null
 5. **写操作必须有真实 `user_id` 和真实 `food_code`**。
 6. **异步必须等到终态**再总结；任务还在处理中时如实说明。
 7. **接口返回与文档对不上时，先怀疑文档过期**：按 `07-integration-ops.md`「文档漂移自检与自愈」核对官网原文，不要断言接口坏了，也不要改文档去迎合实现。
-8. **凭证与个人数据**：不回显完整值、不写进代码、不进提交、不上传。
+8. **完整优先**：详情类接口必须按第 2 步第 3 条加满可选字段；接口已返回的营养素、单位、食材构成、NRV 等明细，不得为了回答简短而省略，也不得只报热量与三大营养素。
+9. **展示不贴原始数据**：最终回复用结论 + 中文表格/短行呈现，字段名翻成中文、数值带单位；禁止整段贴 JSON、`config.py call` 输出或 curl。
+10. **凭证与个人数据**：不回显完整值、不写进代码、不进提交、不上传。
 
 ## 需要细节时看这里
 
 | 我要…… | 打开 |
 |---|---|
 | 找该调哪个接口（方法/路径/关键入参） | [references/00-endpoints.md](./references/00-endpoints.md) |
+| 可选字段开关（`with_*` / `with_nrv` / `ingredients`）与现成完整取数命令 | [references/00-endpoints.md](./references/00-endpoints.md)「完整取数参数」 |
+| 怎么把结果排成表格/卡片（食物、识别、食谱、体重、饮食） | [references/08-presentation.md](./references/08-presentation.md) |
 | 本地配置、请求头、异步轮询、排错表、已知坑、文档自愈流程 | [references/07-integration-ops.md](./references/07-integration-ops.md) |
 | 食物营养、识别、食谱、体重、饮食的字段与枚举 | `references/02`~`06` 各篇（内部参数依据，按需只读对应章节） |
 | 官网当前原文、更新本地快照 | `python3 <技能目录>/scripts/fetch_docs.py`（用法见操作细则「文档漂移自检与自愈」） |
 
 **发起调用前先读 [references/07-integration-ops.md](./references/07-integration-ops.md)**：本地配置读写规则、`X-Api-Key` 请求头、异步轮询、错误码排错、关键约束与坑都在那篇里。
+
+**写回复前先读 [references/08-presentation.md](./references/08-presentation.md)**：各类结果的表格/卡片模板、数值口径、错误与异步状态的中文说法都在那篇里。

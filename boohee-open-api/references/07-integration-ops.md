@@ -106,10 +106,16 @@ python3 <技能目录>/scripts/config.py call GET '/v1/food/search?keyword=牛�
 
 1. **确认凭证已就绪**：先 `python3 <技能目录>/scripts/config.py check`，`KEY_OK` 才继续；再用 `show` 查看 `user_id` 等字段。
 2. **定位接口**：用 `00-endpoints.md` 的速查表匹配能力，不要自造路径。版本前缀：食物 / 识别 / 食谱是 `v1`，体重 / 饮食记录是 `v2`。
-3. **带业务身份**：食谱、体重、饮食接口必须传 `user_id`，默认取 `profile.user_id`；为空时先问用户。
-4. **两段式查询**：`/v1/food/search` 拿 `food_code` 后再查 `/v1/food/detail`；分类先 `/v1/food/categories` 拿 `id` 和 `kind`，再查 `/v1/food/list`。
-5. **图片输入**：`image_url` 或 `image_data`（base64），≤10MB，jpg/jpeg/jpe/png。
-6. **分页**：`search` 的 `per_page` 最大 50，返回带 `has_more`；体重与曲线接口用 `page` / `page_size`，返回带 `total` / `has_more`。用户要全量时按需翻页，并在回答里说明范围。
+3. **完整取数**：补充字段默认关闭，不传就静默省略。按 `00-endpoints.md`「完整取数参数」加满：
+   - `/v1/food/detail` → `with_ingredients=true&with_units=true&with_materials=true`
+   - `/v1/food/search`、`/v1/food/list` → `with_units=true`
+   - `/v1/food/image_recognize_detail` → `with_nrv=true&ingredients=<全量编码>`
+
+   响应里已返回的 `ingredients`、`units`、`materials`、`nrv` 在回答中如实给出，不要只报热量与三大营养素。
+4. **带业务身份**：食谱、体重、饮食接口必须传 `user_id`，默认取 `profile.user_id`；为空时先问用户。
+5. **两段式查询**：`/v1/food/search` 拿 `food_code` 后再查 `/v1/food/detail`；分类先 `/v1/food/categories` 拿 `id` 和 `kind`，再查 `/v1/food/list`。
+6. **图片输入**：`image_url` 或 `image_data`（base64），≤10MB，jpg/jpeg/jpe/png。
+7. **分页**：`search` 的 `per_page` 最大 50，返回带 `has_more`；体重与曲线接口用 `page` / `page_size`，返回带 `total` / `has_more`。用户要全量时按需翻页，并在回答里说明范围。
 
 ## 4. 异步任务轮询
 
@@ -121,6 +127,8 @@ python3 <技能目录>/scripts/config.py call GET '/v1/food/search?keyword=牛�
 4. 任务未到终态时**不要**把中间状态当成最终结果交付；回答里说明「仍在处理中」。
 
 ## 5. 响应与错误码
+
+`config.py call` 打印的原始返回只用于自己解析，**不要直接贴进回复**。展示前按 `08-presentation.md` 转成结论 + 中文表格；报错也翻成一句人话，不贴整段 JSON。
 
 统一响应外层：`{"code": 0, "message": "...", "now": 时间戳, "data": {...}}`。`code=0` 成功，非 0 失败；失败时以 `message` 为准向用户说明，不猜。
 
@@ -134,6 +142,7 @@ python3 <技能目录>/scripts/config.py call GET '/v1/food/search?keyword=牛�
 
 ## 6. 关键约束与坑
 
+- 详情类接口的 `with_*` 默认 `false`：`food/detail` 不带就没有 `ingredients`/`units`/`materials`；`image_recognize_detail` 不带 `with_nrv`/`ingredients` 就只回热量与三大营养素。默认按 `00-endpoints.md`「完整取数参数」加满。
 - 枚举值必须查原文：`meal_type`/`time_type`（1早餐 2中餐 3晚餐 4加餐 6/7/8 加餐）、`health_light`（0无 1绿 2黄 3红）、`gender`、`ban_foods` 1-14、`illness` 1-6、`diet_mode` 字符串集合等，都在各章表格里，别猜。
 - 营养数据口径是「每 100g」，实际摄入要按 `amount`/`weight` 折算；`nrv` 是小数（0.15 = 15%）。
 - 搜索用 `keyword` 或 `barcode`；写饮食记录只接受食物库的 `food_code`（`foods` 备注「仅支持食物库食物」）。
@@ -212,6 +221,7 @@ python3 <技能目录>/scripts/fetch_docs.py --apply
 | 生成智能食谱、食谱详情、换一换、替换单菜/整餐、饮食模式列表与详情、食谱概要 | `04-recipe.md` |
 | 体重记录增删查、最新体重、体重/体脂曲线 | `05-weight.md` |
 | 饮食记录批量/单条写入、删除、修改、按天查询、当日最新 | `06-diet.md` |
+| 把结果排成表格/卡片、数值口径、错误与异步状态的中文说法 | `08-presentation.md` |
 | 本地配置细则、请求头、异步轮询、排错、已知坑、文档自愈 | `07-integration-ops.md`（本篇） |
 
 每章文件是官网文档的逐字导出（含 `> 文档编号 / 更新时间`）。其中的 curl 与返回示例仅供核对参数与字段口径，**不向用户展示**。

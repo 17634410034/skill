@@ -79,7 +79,7 @@ curl --request GET 'https://api.boohee.com/open-apis/v1/food/search?keyword=%E8%
 
 ## 2.2 食物详情
 
-> 文档编号: `dc043193` · 更新时间: 2026-09-21 16:15:27
+> 文档编号: `dc043193` · 更新时间: 2026-10-28 11:53:12
 
 #### 接口说明
 根据食物 code 获取食物详情。
@@ -97,9 +97,9 @@ curl --request GET 'https://api.boohee.com/open-apis/v1/food/search?keyword=%E8%
 |参数名|类型|必填|说明|
 |---|---|---|---|
 | code | String | 是 | 食物编码（从食物搜索接口获取）|
-| with_ingredients | Boolean | 否 | 是否返回 ingredients 字段数据，默认 false |
-| with_units | Boolean | 否 | 是否返回 units 字段数据，默认 false |
-| with_materials | Boolean | 否 | 是否返回 materials 字段数据，默认 false |
+| with_ingredients | Boolean | 否 | 是否返回 ingredients 字段数据（ingredients 字段包含食物完整的营养信息字段），默认 false |
+| with_units | Boolean | 否 | 是否返回 units 字段数据（unit 字段包含食物所有的扩展单位，如：1 碗对应多少克等），默认 false |
+| with_materials | Boolean | 否 | 是否返回 materials 字段数据（如果食物类型为菜肴，materials 所含组成这个菜肴的所有食材及重量），默认 false |
 
 #### 返回示例
 ```json
